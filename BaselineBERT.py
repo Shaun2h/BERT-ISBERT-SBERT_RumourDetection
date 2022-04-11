@@ -1,0 +1,280 @@
+import csv
+import torch
+import os
+import random
+import json
+import torch.optim
+import train_loops
+from ast import literal_eval
+from BERT_model import GeneralBERTclassifier
+from transformers import BertTokenizer, BertModel
+from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import StratifiedShuffleSplit
+from dataset_classes import indo_dataset_class, dataset_class_PHEME
+
+    
+if __name__=="__main__":
+    # sbert calculated sentence loss modifier = 0.0001
+    output_all_predictions = False
+    randomstate = 0
+    test_only_last =True
+    cut_datapercentage = 0.4
+    testpercentage = 0.3
+    max_epoch = 30
+    batch_size = 8
+    start_learn_rate=5e-5
+    scheduler_step_size = 3
+    momentum = 0.9 # if not Adam.
+    scheduler_gamma = 0.9
+    pheme_directory = "Pheme_dataset"
+    indo_directory = "Indo_dataset"
+    bert_softmax_style = False
+    """
+    Batch size: 16, 32
+    Learning rate (Adam): 5e-5, 3e-5, 2e-5
+    Number of epochs: 2, 3, 4
+    """
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    mainpath = os.path.join("resource_creation","all-rnr-annotated-threads")
+    tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
+
+    if not os.path.exists("pheme_traintest_splits.json"):
+        combined_data = []
+        labels = []
+        with open(os.path.join(pheme_directory,"PHEME_labelsplits.txt"),"r",encoding="utf-8") as labelfile:
+            for line in labelfile:
+                if line:
+                    root = line.split()[0]
+                    labellist = literal_eval(" ".join(line.split()[1:]))
+                    label = labellist[0]    
+                    combined_data.append(root)
+                    labels.append(label)
+        
+        
+        sss = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=randomstate) # save random state for reproducibility
+        traintestindexes = []
+        for train_index, test_index in sss.split(combined_data, labels):    
+            train = []
+            test = []
+            for trainsubject in train_index:
+                train.append(combined_data[trainsubject])
+            for testsubject in test_index:
+                test.append(combined_data[testsubject])
+            traintestindexes.append([train,test])
+            
+        with open(os.path.join(pheme_directory,"pheme_traintest_splits.json"),"w",encoding="utf-8") as dumpfile:
+            json.dump(traintestindexes,dumpfile)
+    else:
+        with open(os.path.join(pheme_directory,"pheme_traintest_splits.json"),"r",encoding="utf-8") as dumpfile:
+            traintestindexes = json.load(dumpfile)
+    
+    with open(os.path.join(pheme_directory,"Eventsplit_details.txt"),"r",encoding="utf-8") as dumpfile:
+        eventrefdict = json.load(dumpfile)
+    
+    
+    
+    ##################################################################################################################################
+    indo_data = []
+    indo_label = []
+    indo_backref_dict = {}
+    with open(os.path.join(indo_directory,"daniel_subsettweets.csv"),"r",encoding="utf-8") as disinfofile:
+        disinfo_csv_reader = csv.DictReader(disinfofile)
+        rowcount=0
+        for row in disinfo_csv_reader:
+            # "tweetid,userid,user_display_name,user_screen_name,user_reported_location,user_profile_description,user_profile_url,follower_count,following_count,account_creation_date,account_language,tweet_language,tweet_text,tweet_time,tweet_client_name,in_reply_to_userid,in_reply_to_tweetid,quoted_tweet_tweetid,is_retweet,retweet_userid,retweet_tweetid,latitude,longitude,quote_count,reply_count,like_count,retweet_count,hashtags,urls,user_mentions,poll_choices"
+            tweetid = row["tweetid"]
+            tweet_text = row["tweet_text"]
+            userid = row["userid"]
+            indo_data.append(tweet_text)
+            indo_label.append(0)
+            indo_backref_dict[tweet_text] = [tweetid,userid,0]
+            
+    with open(os.path.join(indo_directory,"noisetweets.csv"),"r",encoding="utf-8") as noisefile:
+        nosie_csv_reader = csv.DictReader(noisefile)
+        rowcount=0
+        for row in nosie_csv_reader:
+            # "tweetid,userid,user_display_name,user_screen_name,user_reported_location,user_profile_description,user_profile_url,follower_count,following_count,account_creation_date,account_language,tweet_language,tweet_text,tweet_time,tweet_client_name,in_reply_to_userid,in_reply_to_tweetid,quoted_tweet_tweetid,is_retweet,retweet_userid,retweet_tweetid,latitude,longitude,quote_count,reply_count,like_count,retweet_count,hashtags,urls,user_mentions,poll_choices"
+            tweetid = row["tweetid"]
+            tweet_text = row["tweet_text"]
+            userid = row["userid"]
+            indo_data.append(tweet_text)
+            indo_label.append(1)
+            indo_backref_dict[tweet_text] = [tweetid,userid,1]    
+
+
+    if not os.path.exists(os.path.join(indo_directory,"indo_traintest_splits.json")):
+        indo_traintestindexes = []
+        sss = StratifiedShuffleSplit(n_splits=5, test_size=0.5, random_state=0)
+        splitter = StratifiedShuffleSplit(n_splits=5,random_state=0) # save random state for reproducibility
+        for train_index, test_index in sss.split(indo_data, indo_label):    
+            indo_traintestindexes.append([train_index.tolist(),test_index.tolist(),"INDO"])
+        with open(os.path.join(indo_directory,"indo_traintest_splits.json"),"w",encoding="utf-8") as dumpfile:
+            json.dump(indo_traintestindexes,dumpfile)
+    else:
+        with open(os.path.join(indo_directory,"indo_traintest_splits.json"),"r",encoding="utf-8") as dumpfile:
+            indo_traintestindexes = json.load(dumpfile)
+    
+    ##################################################################################################################################
+    
+    
+    
+    
+    
+    
+    for eventwrap in traintestindexes+list(eventrefdict.keys())+indo_traintestindexes: # isolate a single event as the TEST case, or run it as a split.
+        
+        if type(eventwrap)==str: #withheld one event as test.
+            train = []
+            for internal_event in eventrefdict:
+                if internal_event!=eventwrap:
+                    train.extend(eventrefdict[internal_event])
+                else:
+                    test = eventrefdict[eventwrap]
+        
+            train_dataset = dataset_class_PHEME(train, tokenizer, device, os.path.join(pheme_directory,"phemethreaddump.json"))
+            test_dataset = dataset_class_PHEME(test, tokenizer, device, os.path.join(pheme_directory,"phemethreaddump.json"))
+            print("Done loading Datasets")
+            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+        
+        elif len(eventwrap)==3: # it's the indonesian dataset split.
+            train = eventwrap[0]
+            test = eventwrap[1]
+            train_dataset = indo_dataset_class_PHEME(train,indo_data,indo_label,indo_backref_dict)
+            test_dataset = indo_dataset_class_PHEME(test,indo_data,indo_label,indo_backref_dict)
+            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=0)    
+            eventwrap = "_indosplit_"+str(indo_traintestindexes.index(eventwrap))
+        
+        else: # it's a pheme Split.
+            train = eventwrap[0]
+            test = eventwrap[1]
+            train_dataset = dataset_class_PHEME(train, tokenizer, device, os.path.join(pheme_directory,"phemethreaddump.json"))
+            test_dataset = dataset_class_PHEME(test, tokenizer, device, os.path.join(pheme_directory,"phemethreaddump.json"))
+            
+            print("Done loading Datasets")
+            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=0)    
+            eventwrap = "_split_"+str(traintestindexes.index(eventwrap))
+            
+            if output_all_predictions:
+                combined_dataset = dataset_class_PHEME(train+test)
+                combined_loader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+                        
+                    
+      
+        
+        
+        
+
+        train_correctcount = []
+        train_totalloss = []
+        train_totalsubjects = []
+        test_correctcount = []
+        test_totalloss = []
+        test_totalsubjects = []
+        train_percentagecorrect = []
+        test_percentagecorrect = []
+        
+        classifier_model = GeneralBERTclassifier(bert_softmax_style).to(device)
+        if not bert_softmax_style:
+            loss_fn_bce = torch.nn.BCELoss().to(device)
+        else:
+            loss_fn_softmax = torch.nn.CrossEntropyLoss().to(device)
+
+        classifier_optimizer_bce = torch.optim.Adam(classifier_model.parameters(),lr=start_learn_rate)
+        classifier_scheduler_bce = torch.optim.lr_scheduler.StepLR(classifier_optimizer_bce, scheduler_step_size, gamma=scheduler_gamma)
+        modelname="BCE_general_nosoftmax_"+eventwrap
+        for currentepoch in range(max_epoch):
+            # if output_all_predictions and currentepoch==29:
+                # classifier_model_BCE.load_state_dict(torch.load("model_bce"+str(currentepoch)+str(eventwrap)+".torch"))
+                # dotest(classifier_model_BCE,combined_loader,activation_func_bce,is_ce = False,batch_size=batch_size,device=device,loss_fn=loss_fn_bce,name=modelname+"_ALL_",epoch=currentepoch)
+                # quit()
+            # elif test_only_last and currentepoch==29:
+                # classifier_model_BCE.load_state_dict(torch.load("model_bce"+str(currentepoch)+str(eventwrap)+".torch"))
+                # dotest(classifier_model_BCE,test_dataloader,activation_func_bce,is_ce = False,batch_size=batch_size,device=device,loss_fn=loss_fn_bce,name=modelname,epoch=currentepoch)
+                # continue
+            # elif output_all_predictions or test_only_last:
+                # continue
+        
+            print("-"*20)
+            print("BCE Train:", currentepoch)
+            correctcount,totalsubjects,totalloss = train_loops.baseline_bert_loop(classifier_model, train_dataloader,loss_fn = loss_fn_bce, optimizer=classifier_optimizer_bce,batch_size=batch_size,device=device,name=modelname,epoch=currentepoch,backprop=True)
+
+            
+            train_correctcount.append(correctcount)
+            train_totalloss.append(totalloss)
+            train_totalsubjects.append(totalsubjects)
+            train_percentagecorrect.append(correctcount/totalsubjects*100)
+            print("Test")
+            totalsubjects,totalloss,correctcount = train_loops.baseline_bert_loop(classifier_model,test_dataloader,batch_size=batch_size,device=device,loss_fn=loss_fn_bce,name=modelname,epoch=currentepoch)
+            test_correctcount.append(correctcount)
+            test_totalloss.append(totalloss)
+            test_totalsubjects.append(totalsubjects)
+            test_percentagecorrect.append(correctcount/totalsubjects*100)
+            classifier_scheduler.step()
+            
+            
+            torch.save(classifier_model.state_dict(),"model_bce"+str(currentepoch)+str(eventwrap)+".torch")
+            with open("training_deets_bce"+eventwrap+".txt","w",encoding="utf-8") as trainingout:
+                json.dump(
+                {"BCE":{"Train": {"Train Correct Count":train_correctcount, "Train Total Loss": train_totalloss, "Total Subjects": train_totalsubjects, "Percentage correct":train_percentagecorrect} ,
+                "Test":{"Test Correct Count":test_correctcount, "Test Total Loss":test_totalloss, "Test Total Subjects":test_totalsubjects,"Percentage correct":test_percentagecorrect}},
+                "cut_datapercentage":cut_datapercentage, "testpercentage":testpercentage, "max_epoch":max_epoch, "batch_size":batch_size, "start_learn_rate":start_learn_rate, "scheduler_step_size":scheduler_step_size, "momentum":momentum}
+                , trainingout,indent=4)
+
+        
+        # classifier_model_softmax = GeneralBERTclassifier(softmax=True).to(device)
+        # activation_func_softmax = torch.nn.Softmax(dim=1).to(device)
+        # loss_fn_softmax = torch.nn.CrossEntropyLoss().to(device)
+        # classifier_optimizer_softmax = torch.optim.Adam(classifier_model_softmax.parameters(),lr=start_learn_rate)
+        # classifier_scheduler_softmax = torch.optim.lr_scheduler.StepLR(classifier_optimizer_softmax, scheduler_step_size, gamma=scheduler_gamma)
+
+        # train_correctcount_softmax = []
+        # train_totalloss_softmax = []
+        # train_totalsubjects_softmax = []
+        # test_correctcount_softmax = []
+        # test_totalloss_softmax = []
+        # test_totalsubjects_softmax = []
+        # train_percentagecorrect_softmax = []
+        # test_percentagecorrect_softmax = []
+
+        
+
+        # modelname="BCE_general_softmax"+eventwrap
+        # for currentepoch in range(max_epoch):    
+            # if output_all_predictions and currentepoch==29:
+                # classifier_model_softmax.load_state_dict(torch.load("model_softmax"+str(currentepoch)+str(eventwrap)+".torch"))
+                # dotest(classifier_model_softmax,combined_loader,activation_func_softmax,is_ce = True,batch_size=batch_size,device=device,tokenizer=tokenizer,loss_fn=loss_fn_softmax,name=modelname+"_ALL_",epoch=currentepoch)
+                # quit()
+            # elif test_only_last and currentepoch==29:
+                # sentence_BERT_softmax.load_state_dict(torch.load("sentence_softmax"+str(currentepoch)+str(eventwrap)+".torch"))
+                # dotest(sentence_BERT_softmax,test_dataloader,activation_func_softmax,is_ce = True,batch_size=batch_size,device=device,tokenizer=None,loss_fn=loss_fn_softmax,name=modelname,epoch=currentepoch)
+                # continue
+            # elif output_all_predictions or test_only_last:
+                # continue
+        
+            # print("-"*20)
+            # print("Softmax Train:", currentepoch)
+            # correctcount,totalsubjects,totalloss = doloop(classifier_model_softmax,train_dataloader,loss_fn_softmax,activation_func_softmax,classifier_optimizer_softmax,is_ce=True, batch_size=batch_size,device=device,tokenizer=tokenizer,name=modelname,epoch=currentepoch)
+            # classifier_model_softmax.load_state_dict(torch.load("model_softmax"+str(currentepoch)+str(eventwrap)+".torch"))
+            
+            # train_correctcount_softmax.append(correctcount)
+            # train_totalloss_softmax.append(totalloss)
+            # train_totalsubjects_softmax.append(totalsubjects)
+            # train_percentagecorrect_softmax.append(correctcount/totalsubjects*100)
+
+            # print("Test")
+
+            # totalsubjects,totalloss,correctcount = dotest(classifier_model_softmax,test_dataloader,activation_func_softmax,is_ce = True,batch_size=batch_size,device=device,tokenizer=tokenizer,loss_fn=loss_fn_softmax,name=modelname,epoch=currentepoch)
+            # test_correctcount_softmax.append(correctcount)
+            # test_totalloss_softmax.append(totalloss)
+            # test_totalsubjects_softmax.append(totalsubjects)
+            # test_percentagecorrect_softmax.append(correctcount/totalsubjects*100)
+            # classifier_scheduler_softmax.step()
+            
+            # torch.save(classifier_model_softmax.state_dict(),"model_softmax"+str(currentepoch)+str(eventwrap)+".torch")
+            # with open("training_deets_softmax"+eventwrap+".txt","w",encoding="utf-8") as trainingout:
+                # json.dump({"Softmax":{"Train":{"Train Correct Count":train_correctcount_softmax, "Train Total Loss": train_totalloss_softmax, "Total Subjects": train_totalsubjects_softmax,  "Percentage Correct":train_percentagecorrect_softmax},
+                # "Test": {"Test Correct Count":test_correctcount_softmax, "Test Total Loss":test_totalloss_softmax, "Test Total Subjects":test_totalsubjects_softmax,"Percentage Correct":test_percentagecorrect_softmax}},
+                # "cut_datapercentage":cut_datapercentage, "testpercentage":testpercentage, "max_epoch":max_epoch, "batch_size":batch_size, "start_learn_rate":start_learn_rate, "scheduler_step_size":scheduler_step_size, "momentum":momentum}, trainingout)
