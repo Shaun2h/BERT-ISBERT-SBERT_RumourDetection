@@ -183,7 +183,7 @@ target/
 .python-version
 
 __pycache__
-
+models/__pycache__
 # celery beat schedule file
 celerybeat-schedule
 
