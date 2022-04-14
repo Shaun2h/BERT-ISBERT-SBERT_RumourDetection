@@ -6,7 +6,7 @@ import json
 import torch.optim
 import train_loops
 from ast import literal_eval
-from models.BERT_model import GeneralBERTclassifier
+from models.SBERT_model import SentenceBERTclassifier
 from transformers import BertTokenizer, BertModel
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -142,7 +142,7 @@ if __name__=="__main__":
             train = eventwrap[0]
             test = eventwrap[1]
             train_dataset = indo_dataset_class(train,indo_data,indo_label,indo_backref_dict, tokenizer, device)
-            test_dataset = indo_dataset_class(test,indo_data,indo_label,indo_backref_dict, tokenizer, device,)
+            test_dataset = indo_dataset_class(test,indo_data,indo_label,indo_backref_dict, tokenizer, device)
             train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=0)    
             eventwrap = "_indosplit_"+str(indo_traintestindexes.index(eventwrap))
@@ -163,11 +163,17 @@ if __name__=="__main__":
                 combined_loader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
                         
                     
-      
-        
-        
-        
-
+        classifier_model = SentenceBERTclassifier(softmax=True).to(device)
+        if not bert_softmax_style:
+            loss_fn = torch.nn.BCELoss().to(device)
+            modelname="BCE_SBERTgeneral_nosoftmax_"+eventwrap
+        else:
+            loss_fn = torch.nn.CrossEntropyLoss().to(device)
+            modelname="CE_SBERTgeneral_nosoftmax_"+eventwrap
+            
+        classifier_optimizer = torch.optim.Adam(classifier_model.parameters(),lr=start_learn_rate)
+        classifier_scheduler = torch.optim.lr_scheduler.StepLR(classifier_optimizer, scheduler_step_size, gamma=scheduler_gamma)
+                
         train_correctcount = []
         train_totalloss = []
         train_totalsubjects = []
@@ -176,31 +182,14 @@ if __name__=="__main__":
         test_totalsubjects = []
         train_percentagecorrect = []
         test_percentagecorrect = []
+
         
-        classifier_model = GeneralBERTclassifier(bert_softmax_style).to(device)
-        if not bert_softmax_style:
-            loss_fn = torch.nn.BCELoss().to(device)
-            modelname="BCE_BERTgeneral_nosoftmax_"+eventwrap
-        else:
-            loss_fn = torch.nn.CrossEntropyLoss().to(device)
-            modelname="CE_BERTgeneral_nosoftmax_"+eventwrap
-        classifier_optimizer = torch.optim.Adam(classifier_model.parameters(),lr=start_learn_rate)
-        classifier_scheduler = torch.optim.lr_scheduler.StepLR(classifier_optimizer, scheduler_step_size, gamma=scheduler_gamma)
-        
+
+        modelname="SBERT_"+eventwrap
+
         for currentepoch in range(max_epoch):
-            # if output_all_predictions and currentepoch==29:
-                # classifier_model_BCE.load_state_dict(torch.load("model_bce"+str(currentepoch)+str(eventwrap)+".torch"))
-                # dotest(classifier_model_BCE,combined_loader,activation_func_bce,is_ce = False,batch_size=batch_size,device=device,loss_fn=loss_fn_bce,name=modelname+"_ALL_",epoch=currentepoch)
-                # quit()
-            # elif test_only_last and currentepoch==29:
-                # classifier_model_BCE.load_state_dict(torch.load("model_bce"+str(currentepoch)+str(eventwrap)+".torch"))
-                # dotest(classifier_model_BCE,test_dataloader,activation_func_bce,is_ce = False,batch_size=batch_size,device=device,loss_fn=loss_fn_bce,name=modelname,epoch=currentepoch)
-                # continue
-            # elif output_all_predictions or test_only_last:
-                # continue
-        
             print("-"*20)
-            print("BERT Train:", currentepoch)
+            print("SBERT Train:", currentepoch)
             correctcount,totalsubjects,totalloss = train_loops.baseline_bert_loop(classifier_model, train_dataloader,loss_fn = loss_fn, optimizer=classifier_optimizer,batch_size=batch_size,device=device,name=modelname,epoch=currentepoch,backprop=True,threshold=decision_threshold)
 
             

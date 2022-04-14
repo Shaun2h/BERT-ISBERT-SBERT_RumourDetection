@@ -21,8 +21,10 @@ class GeneralBERTclassifier(torch.nn.Module):
             self.ce = False
 
     
-    def forward(self, inputs,dropout=False):
-        outputs = self.bert(**inputs)
+    def forward(self, inputs,dropout=False,rawdata=""):
+        # raw data is never used for this model.
+        with torch.no_grad():
+            outputs = self.bert(**inputs)
         pooled_output = outputs[1]
         # print(pooled_output.shape)
         if dropout:
