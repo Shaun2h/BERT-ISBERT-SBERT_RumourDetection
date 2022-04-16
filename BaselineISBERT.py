@@ -20,7 +20,7 @@ if __name__=="__main__":
     test_only_last =True
     cut_datapercentage = 0.4
     testpercentage = 0.3
-    max_epoch = 2
+    max_epoch = 30
     batch_size = 8
     start_learn_rate=5e-5
     scheduler_step_size = 3
@@ -183,10 +183,10 @@ if __name__=="__main__":
         classifier_model = IS_BERT(bert_softmax_style, mi_loss_multiplier=mi_loss_multiplier).to(device)
         if not bert_softmax_style:
             loss_fn = torch.nn.BCELoss().to(device)
-            modelname="BCE_BERTgeneral_nosoftmax_"+eventwrap
+            modelname="BCE_ISBERTgeneral_nosoftmax_"+eventwrap
         else:
             loss_fn = torch.nn.CrossEntropyLoss().to(device)
-            modelname="CE_BERTgeneral_nosoftmax_"+eventwrap
+            modelname="CE_ISBERTgeneral_nosoftmax_"+eventwrap
         classifier_optimizer = torch.optim.Adam(classifier_model.parameters(),lr=start_learn_rate)
         classifier_scheduler = torch.optim.lr_scheduler.StepLR(classifier_optimizer, scheduler_step_size, gamma=scheduler_gamma)
         
