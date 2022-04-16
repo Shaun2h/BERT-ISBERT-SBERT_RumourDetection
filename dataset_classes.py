@@ -75,4 +75,28 @@ class dataset_class_PHEME(Dataset):
     def backref(self,idx):
         return self.allthreads[self.rootitems[idx]], self.rootitems[idx]
         
+class dummy_dataset(Dataset):
+    def __init__(self, threadtextlist, tokeniser, device):
+        # 0=noise, 1 = rumour
+        self.tokenizer = tokeniser
+        self.device = device
+        self.threadtextlist = threadtextlist
+        
+    def __len__(self):
+        return 1
+
+    def __getitem__(self, idx):
+        threadtextlist = self.threadtextlist
+        textlist = ""
+        
+        for item in threadtextlist:
+            textlist = textlist+ item[0]+" [SEP]"
+        textlist = textlist[:-6] # remove last sep.
+        with torch.no_grad():
+            tokenized_data = self.tokenizer(textlist, return_tensors="pt", padding="max_length", truncation=True)
+            tokenized_data["input_ids"] = tokenized_data["input_ids"].squeeze()
+            tokenized_data['token_type_ids'] = tokenized_data['token_type_ids'].squeeze()
+            tokenized_data['attention_mask'] = tokenized_data['attention_mask'].squeeze()
+        tokenized_data.to(self.device)
+        return tokenized_data, idx, " ".join(textlist)
         

@@ -1,6 +1,11 @@
 # BERT-ISBERT-SBERT_RumourDetection
 BERT, ISBERT, SBERT as rumour detection baselines on PHEME dataset. Also on Indonesian Disinfo dataset.  README for details.
 
+# Running a sample on a trained model
+- No trained models provided here. But you can... run this to train them. The datasets are processed and in here too.
+- processing scripts are available here. PHEME needs the all-rnr-annotations folder in the same directory as the processing script "Pheme_Tree_extraction.py"
+- Read the inside of run_samples.py to see how to format your inputs. Keep in mind, TREE STRUCTURE DOES NOT MATTER FOR THESE MODELS.
+
 # ISBERT Source
 This repository uses files from ISBERT's original repository, with edits to ensure they work.
 - Repository here: [https://github.com/yanzhangnlp/IS-BERT/tree/ea6622c81a2d732798d974db74cc83f5398ac4d5](https://github.com/yanzhangnlp/IS-BERT/tree/ea6622c81a2d732798d974db74cc83f5398ac4d5)

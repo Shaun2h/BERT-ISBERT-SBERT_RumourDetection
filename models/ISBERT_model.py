@@ -60,6 +60,12 @@ class IS_BERT(torch.nn.Module):
         else:
             dropped_bert_embeds = outputs_bert["last_hidden_state"][:,0,:].squeeze()
         logits = self.classifier(dropped_bert_embeds)
-        outputs = self.activation_fn(logits)
+        
+        try:
+            outputs = self.activation_fn(logits)
+        except IndexError:
+            print("Only a single sample was passed in. Reshaping due to shape error. Ignore if expected.")
+            outputs = self.activation_fn(logits.reshape(1,-1)) # lacks dimension. Occurs when only a SINGLE sample is passed in. 
+            
         return logits, outputs, mi_loss
         

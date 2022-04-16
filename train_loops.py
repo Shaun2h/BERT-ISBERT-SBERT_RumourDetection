@@ -112,8 +112,11 @@ def baseline_bert_loop(model,dataloader,batch_size=12,device="cpu",loss_fn=None,
         "Recall",recall,"\n",]
         
         pairings.insert(0,report)
-
-        with open(name+str(epoch)+"_epoch.json","w",encoding="utf-8") as jsondumpfile:
+        if backprop:
+            insertion="_trainpart_"
+        else:
+            insertion="_testpart_"
+        with open(name+str(epoch)+insertion+"_epoch.json","w",encoding="utf-8") as jsondumpfile:
             json.dump(pairings,jsondumpfile,indent=4)
         
     return totalsubjects,totalloss,correctcount
@@ -227,8 +230,11 @@ def baseline_ISBERT_loop(model,dataloader,batch_size=12,device="cpu",loss_fn=Non
         "Recall",recall,"\n",]
         
         pairings.insert(0,report)
-
-        with open(name+str(epoch)+"_epoch.json","w",encoding="utf-8") as jsondumpfile:
+        if backprop:
+            insertion="_trainpart_"
+        else:
+            insertion="_testpart_"
+        with open(name+str(epoch)+insertion+"_epoch.json","w",encoding="utf-8") as jsondumpfile:
             json.dump(pairings,jsondumpfile,indent=4)
         
     return totalsubjects,totalloss,correctcount
