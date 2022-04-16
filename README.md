@@ -9,7 +9,8 @@ This repository uses files from ISBERT's original repository, with edits to ensu
     2. [CNN](https://github.com/yanzhangnlp/IS-BERT/blob/ea6622c81a2d732798d974db74cc83f5398ac4d5/sentence_transformers/models/CNN.py)
     3. [Pooling](https://github.com/yanzhangnlp/IS-BERT/blob/ea6622c81a2d732798d974db74cc83f5398ac4d5/sentence_transformers/models/Pooling.py)
 - As is the custom, they have been edited to be compatible with a more recent huggingface version/sentence-transformers version.
-- Tested on: >pip install torch==1.10.1+cu113 torchvision==0.11.2+cu113 torchaudio==0.10.1 -f https://download.pytorch.org/whl/torch_stable.html
+- Tested on: >pip install torch==1.10.1+cu113 torchvision==0.11.2+cu113 torchaudio==0.10.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
+    - Note that +cu113 is to dictate cuda version. In another linux server, failing to specify causes it to download rocm instead.
     - My Cuda is 11.3. This isn't listed in the previous versions page explicitly but.. is available.
 - transformers - 4.12.3
 - torch - 1.10.0
