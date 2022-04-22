@@ -1,6 +1,9 @@
 # BERT-ISBERT-SBERT_RumourDetection
 BERT, ISBERT, SBERT as rumour detection baselines on PHEME dataset. Also on Indonesian Disinfo dataset.  README for details.
 
+We use bert-base-multilingual-cased to do tokenisation. The bert itself is NEVER backpropagated through. (it's run with torch.no_grad())
+
+
 # Running a sample on a trained model
 - No trained models provided here. But you can... run this to train them. The datasets are processed and in here too.
 - processing scripts are available here. PHEME needs the all-rnr-annotations folder in the same directory as the processing script "Pheme_Tree_extraction.py"
