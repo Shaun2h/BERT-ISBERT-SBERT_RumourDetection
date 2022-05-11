@@ -96,7 +96,7 @@ if __name__=="__main__":
     bert_softmax_style = True
     decision_threshold = 0.5
     mi_loss_multiplier = 0.1
-    
+    detailed_link_appending = False
     target_is_pheme = True # true for pheme, false for indo
     loadpath = "SBERT"
     # attempt to infer model type via loadpath.
@@ -224,20 +224,28 @@ if __name__=="__main__":
                 else:
                     tree_dict[reactionid] = [reactiontext,reactionid,tree_dict[reactionid][2],predicted,actual,reaction_dict["created_at"],reaction_dict["user"]["screen_name"],prediction_value]
                 
-                if reaction_target!="null":
+                if not detailed_link_appending:
                     if not reaction_target in tree_dict:
-                        tree_dict[reaction_target] = [None,reaction_target,[[reactionid,reaction_target,"Reply"]],None,None,None,None,None]
+                        tree_dict[reaction_target] = [None,reaction_target,[reactionid],None,None,None,None,None]
                     else:
-                        tree_dict[reaction_target][2].append([reactionid,reaction_target,"Reply"])
-                    tree_dict[reactionid][2].append([reactionid,reaction_target,"Reply"])
-                        
-                        
-                if retweetedornot:
-                    if not reaction_target in tree_dict:
-                        tree_dict[reaction_target] = [None,reaction_target,[[reactionid,reaction_target,"Retweet"]],None,None,None,None,None]
-                    else:
-                        tree_dict[reaction_target][2].append([reactionid,reaction_target,"Retweet"])
-                    tree_dict[reactionid][2].append([reactionid,reaction_target,"Retweet"])
+                        tree_dict[reaction_target][2].append(reactionid)
+                    tree_dict[reactionid][2].append(reaction_target)
+                
+                else:
+                    if reaction_target!="null":
+                        if not reaction_target in tree_dict:
+                            tree_dict[reaction_target] = [None,reaction_target,[[reactionid,reaction_target,"Reply"]],None,None,None,None,None]
+                        else:
+                            tree_dict[reaction_target][2].append([reactionid,reaction_target,"Reply"])
+                        tree_dict[reactionid][2].append([reactionid,reaction_target,"Reply"])
+                            
+                            
+                    if retweetedornot:
+                        if not reaction_target in tree_dict:
+                            tree_dict[reaction_target] = [None,reaction_target,[[reactionid,reaction_target,"Retweet"]],None,None,None,None,None]
+                        else:
+                            tree_dict[reaction_target][2].append([reactionid,reaction_target,"Retweet"])
+                        tree_dict[reactionid][2].append([reactionid,reaction_target,"Retweet"])
                     
         # print("handlin")
         treelist.append(tree_dict)
