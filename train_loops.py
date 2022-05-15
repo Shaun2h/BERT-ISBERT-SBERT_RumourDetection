@@ -429,8 +429,8 @@ def doloop(model,dataloader,loss_fn,activation_fn,model_optimizer,is_ce = False,
         print("Total loss:",totalloss)
         print("Average loss:",totalloss/totalsubjects)
         report = ["Percentage Correct:", (correctcount/totalsubjects*100),"%","\n",
-        "Total loss:",totalloss,"\n",
-        "Average loss:",totalloss/totalsubjects]
+        "Total loss:",float(totalloss),"\n",
+        "Average loss:",float(totalloss/totalsubjects)]
         pairings.insert(0,report)
 
         with open(name+str(epoch)+"_epoch.json","w",encoding="utf-8") as jsondumpfile:
